@@ -1,0 +1,49 @@
+---
+- name: Setup Jenkins-Server Host
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+  - name: JENKINS-SERVER CHECKER
+    ec2_instance_info:
+      filters:
+        instance-state-name: running
+        "tag:Name": "jenkins-server"
+    register: jenkins_sever_info_out 
+  
+  # BASTION HOST INSTANCE IN PUBLIC SUBNET
+  #Ansible playbook idempotent when managing EC2 instances
+  - name: Creating Bastion Host
+    ec2_instance:
+     state: running
+     name: "jenkins-server"
+     key_name: "linux_pem_key_pair"
+     region: "us-east-1"
+     instance_type: t2.medium
+     image_id: "ami-053b0d53c279acc90"
+     wait: yes
+     wait_timeout: 300
+     exact_count: 1
+     vpc_subnet_id: "subnet-85e383e3"
+     security_group: "sg-032e1497f54be30c0"
+     volumes:
+      - device_name: /dev/sda1
+        ebs:
+          volume_size: 32
+          delete_on_termination: true
+    register: jenkins_server_out
+    when: jenkins_sever_info_out.instances | length == 0
+
+
+  - name: Create or Update Inventory File
+    blockinfile: 
+      path: ./inventory.yaml
+      block: |
+        all:
+         hosts:
+          web01:
+           ansible_host: {{jenkins_server_out.instances[0].public_ip_address}}
+           ansible_user: ubuntu
+           ansible_ssh_private_key_file: key_pair.pem
+
+
